@@ -9,7 +9,7 @@ e.isObject = function (fn) {
   return typeof fn === 'object';
 }
 e.isPromise = function (fn) {
-  console.log('ispromise',fn,  e.isObject(fn) && e.isFunction(fn.then));
+  //console.log('ispromise',fn,  e.isObject(fn) && e.isFunction(fn.then));
   return e.isObject(fn) && e.isFunction(fn.then);
 }
 
@@ -42,7 +42,7 @@ ebb.Future.prototype = {
 
   },
   next: function () {
-    console.log('next', this.result, this.state);
+    //console.log('next', this.result, this.state);
     if (this.resolved && e.isFunction(this.continuation)) {
       this.continuation.call({state: this.state, err: this.state === 'error' ? this.result : false}, this.result);
       delete this.continuation;
@@ -74,7 +74,7 @@ ebb.async = function (fn) {
 
   var asyncFn = function () {
     var future = new ebb.Future();
-    console.log('new future');
+    //console.log('new future');
     var args = Ap.slice.call(arguments);
 
     // push execution to bottom of stack
@@ -113,7 +113,7 @@ ebb.syncAll = function (vals) {
       results[i] = result;
       states[i] = this.state;
       pending--;
-      console.log('pending ', pending)
+      //console.log('pending ', pending)
       checkDone();
     };
   };
@@ -151,7 +151,7 @@ ebb.pipeline = function (/* steps */) {
 
       p.then(function (res) {
         if (steps.length === 0) {
-          console.log('no more steps');
+          //console.log('no more steps');
           me.return(res)
         } else {
           ebb.pipeline.apply(null, steps)(res).then(function (res) { me.return(res); });
@@ -191,27 +191,27 @@ var readFile = ebb.async(function(fileName) {
 });
 
 var p = readFile('myFileName.txt');
-console.log(p.state());
+//console.log(p.state());
 p.then(function (res) {
-  console.log(res);
-  console.log(p.state());
+  //console.log(res);
+  //console.log(p.state());
 });
 
 var p2 = readFile('passwords.txt');
-console.log(p2.state());
+//console.log(p2.state());
 p2.then(function (res) {
-  console.log(res);
-  console.log(this);
+  //console.log(res);
+  //console.log(this);
   if (this.err) {
-    console.log('ERRORRRRR');
+    //console.log('ERRORRRRR');
   }
 });
 
 var p3 = readFile('lulzwut');
-console.log(p3.state());
+//console.log(p3.state());
 p3.then(function (res) {
-  console.log(res);
-  console.log(p3.state());
+  //console.log(res);
+  //console.log(p3.state());
 });
 
 var regularFunction = function () {
@@ -220,7 +220,7 @@ var regularFunction = function () {
 
 
 ebb.syncAll([p, p2, p3, regularFunction()]).then(function (results) {
-  console.log('all finished!');
+  //console.log('all finished!');
 });
 
 var toUpper = function (txt) {
@@ -241,5 +241,7 @@ var randomDelay = ebb.async(function (res) {
 var pipeline = ebb.pipeline(toUpper, cutoff, randomDelay);
 
 ebb.syncAll(['some text', 'moar text', 'silly dogs', 'ting tings'].map(pipeline)).then(function () {
-  console.log('now we are ready for some things!');
+  //console.log('now we are ready for some things!');
 });
+
+exports.ebb = ebb;
