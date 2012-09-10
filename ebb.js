@@ -12,6 +12,9 @@ e.isPromise = function (fn) {
   //console.log('ispromise',fn,  e.isObject(fn) && e.isFunction(fn.then));
   return e.isObject(fn) && e.isFunction(fn.then);
 }
+e.isMonad = function (fn) {
+  return e.isObject(fn) && fn.result;
+}
 
 
 var ebb = {};
@@ -44,7 +47,12 @@ ebb.Future.prototype = {
   next: function () {
     //console.log('next', this.result, this.state);
     if (this.resolved && e.isFunction(this.continuation)) {
-      this.continuation.call({state: this.state, err: this.state === 'error' ? this.result : false}, this.result);
+      var monad = {
+        state: this.state,
+        err: this.state === 'error' ? this.result : false,
+        result: this.result
+      };
+      this.continuation.call(null, monad);
       delete this.continuation;
     }
 
@@ -61,7 +69,7 @@ ebb.Future.prototype = {
       state: function () {
           return future.state;
       }
-    }
+    };
   }
 };
 
@@ -72,10 +80,14 @@ ebb.async = function (fn) {
     return fn;
   }
 
-  var asyncFn = function () {
+  var asyncFn = function (monad) {
     var future = new ebb.Future();
-    //console.log('new future');
-    var args = Ap.slice.call(arguments);
+    var args;
+    if (monad !== undefined && e.isMonad(monad)){
+      args = [].concat(monad.result);
+    } else {
+      args = Ap.slice.call(arguments);
+    }
 
     // push execution to bottom of stack
     setTimeout(function () {
@@ -106,12 +118,10 @@ ebb.syncAll = function (vals) {
   var future = new ebb.Future();
   var pending = 0;
   var results = [];
-  var states = [];
 
   var resolve = function (i) {
     return function (result) {
       results[i] = result;
-      states[i] = this.state;
       pending--;
       //console.log('pending ', pending)
       checkDone();
@@ -144,15 +154,14 @@ ebb.pipeline = function (/* steps */) {
 
   var step = ebb.async(steps.shift());
 
-  return ebb.async(function () {
+  return ebb.async(function (res) {
     var me = this,
-      args = Ap.slice.call(arguments),
-      p = step.apply(null, args);
+      p = step.call(null, {result: res});
 
       p.then(function (res) {
         if (steps.length === 0) {
           //console.log('no more steps');
-          me.return(res)
+          me.return(res);
         } else {
           ebb.pipeline.apply(null, steps)(res).then(function (res) { me.return(res); });
         }
@@ -244,4 +253,4 @@ ebb.syncAll(['some text', 'moar text', 'silly dogs', 'ting tings'].map(pipeline)
   //console.log('now we are ready for some things!');
 });
 
-exports.ebb = ebb;
+typeof exports !== 'undefined' && (exports.ebb = ebb);
