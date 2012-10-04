@@ -1,5 +1,8 @@
 'use strict';
-var Ap = Array.prototype;
+var Ap = Array.prototype,
+    slice = function(a) {
+      return Ap.slice.call(a);
+    };
 
 var e = {};
 e.isFunction = function (fn) {
@@ -7,64 +10,213 @@ e.isFunction = function (fn) {
 };
 e.isObject = function (fn) {
   return typeof fn === 'object';
-}
+};
 e.isPromise = function (fn) {
   //console.log('ispromise',fn,  e.isObject(fn) && e.isFunction(fn.then));
   return e.isObject(fn) && e.isFunction(fn.then);
-}
-e.isMonad = function (fn) {
-  return e.isObject(fn) && fn.result;
+};
+
+/*
+
+interface monad {
+  
 }
 
+ */
 
-var ebb = {};
+e.isMonad = function (obj) {
+  return e.isObject(obj) && obj.hasOwnProperty('result');
+};
+
+e.toResult = function (monad) {
+  return monad.result;
+};
+
+e.extend = function(target, obj /* ... */) {
+  var arg = 1, k;
+  while ((obj = arguments[arg++])) {
+    for (k in obj) {
+      if (obj.hasOwnProperty(k)) {
+        target[k] = obj[k];
+      }
+    }
+  }
+
+  return target;
+};
+
+var ebb = function () {
+  var args = slice(arguments);
+  args = args.map(returnMonad);
+  return new ebb.expression(args);
+};
+
+ebb.expression = function (p) {
+  var me = this;
+  var params = p;
+  var steps = [];
+  var future = new ebb.Future();
+  this.evaluate = function () {
+    if (steps.length === 0) {
+      future.returns(params.map(e.toResult));
+      return future.promise({paramCount: params.length});
+    }
+    else {
+      throw new Error('not implemented');
+    }
+  };
+  this.addStep = function (step) {
+    steps.push(step);
+  };
+};
+
+ebb.expression.prototype.map = function (fn) {
+  this.addStep(
+    function (params) {
+      return params.map(fn);
+    }
+  );
+  return this;
+};
+
+ebb.expression.prototype.filter = function (fn) {
+  this.addStep(
+    function (params) {
+      return params.filter(fn);
+    }
+  );
+  return this;
+};
+
+ebb.expression.prototype.any = function (predicate) {
+  //var promise = this.evaluate();
+  //promise.progress(function (latestResult) {
+  //  if (fn())
+  //});
+  //
+  var future = new ebb.Future();
+  var p = this.evaluate();
+
+  if (p.info.paramCount === 0) {
+    future.returns(false);
+  }
+
+  p.then(function (val) {
+    var params = val.result;
+
+    if (e.isFunction(predicate)) {
+      var i, len;
+      for (i = 0, len = params.length; i < len; i++) {
+        if (predicate(params[i])) {
+          future.returns(true);
+        }
+      }
+
+      future.returns(false);
+    } else {
+      future.returns(params.length > 0);
+    }
+
+
+  });
+
+  return future.promise();
+
+};
+
+ebb.expression.prototype.all = function (predicate) {
+  var params = this.evaluate();
+
+  if (params.length === 0) {
+    return true;
+  }
+
+  var i, len;
+  return params.map(predicate).reduce(function (m,v) { return m && v; });
+};
+
+ebb.expression.prototype.first = function (predicate) {
+  var vals = this.evaluate();
+
+  if (!e.isFunction(predicate)) {
+    if (vals.length === 0) {
+      throw new Error();
+    }
+    return vals[0];
+  }
+
+  var i, len;
+  for (i = 0, len = vals.length; i < len; i++) {
+    var val = vals[i];
+    if (predicate(val)) {
+      return val;
+    }
+  }
+  // none matched
+  throw new Error();
+};
+
 
 
 ebb.Future = function () {
   this.state = 'pending'; // pending, successful, input error, internal error (based on HTTP status code ranges)
   this.resolved = false;
 };
-
-ebb.Future.prototype = {
-  return: function (val) {
-    if (!this.resolved) {
-      this.state = 'successful';
-      this.result = val;
-      this.resolved = true;
-      this.next();
-    }
-  },
-
-  throw: function (err) {
-    if (!this.resolved) {
-      this.state = 'error';
-      this.result = err;
-      this.resolved = true;
-      this.next();
-    }
-
-  },
-  next: function () {
+ebb.next = function () {
     //console.log('next', this.result, this.state);
     if (this.resolved && e.isFunction(this.continuation)) {
-      var monad = {
-        state: this.state,
-        err: this.state === 'error' ? this.result : false,
-        result: this.result
-      };
+      var monad = returnMonad(this.result, this.state);
       this.continuation.call(null, monad);
       delete this.continuation;
     }
 
+  };
+
+var returnMonad = function (result, state) {
+  return {
+    result: result,
+    state: state || 'successful',
+    err: state === 'error' ? result : false
+  };
+
+};
+
+ebb.Future.prototype = {
+  returns: function (val) {
+    if (!this.resolved) {
+      this.state = 'successful';
+      this.result = val;
+      this.resolved = true;
+      ebb.next.call(this);
+    }
   },
-  promise: function () {
+
+  throws: function (err) {
+    if (!this.resolved) {
+      this.state = 'error';
+      this.result = err;
+      this.resolved = true;
+      ebb.next.call(this);
+    }
+
+  },
+  updateProgress: function (val) {
+    if (e.isFunction(this.progressCallback)) {
+      this.progressCallback(val);
+    }
+  },
+  promise: function (info) {
     var future = this;
     return {
+      info: info,
       then: function (c) {
         future.continuation = c;
         if (future.resolved) {
-          future.next();
+          ebb.next.call(future);
         }
+      },
+      onProgress: function (cb) {
+        future.progressCallback = cb;
       },
       state: function () {
           return future.state;
@@ -91,11 +243,16 @@ ebb.async = function (fn) {
 
     // push execution to bottom of stack
     setTimeout(function () {
-      var res = fn.apply(future, args);
-      // if the fn returned a result synchronously, fulfill the promise
-      if (res !== undefined) {
-        future.return(res);
-      }} , 0);
+      try {
+        var res = fn.apply(future, args);
+        // if the fn returned a result synchronously, fulfill the promise
+        if (res !== undefined) {
+          future.returns(res);
+        }
+      } catch (o_O) {
+        future.throws(o_O);
+      }
+    } , 0);
 
     return future.promise();
 
@@ -107,7 +264,7 @@ ebb.async = function (fn) {
 
 ebb.asyncIdentity = ebb.async(function() {
   var args = Ap.slice.call(arguments);
-  this.return.apply(null, args);
+  this.returns.apply(null, args);
 });
 
 /**
@@ -130,7 +287,7 @@ ebb.syncAll = function (vals) {
 
   var checkDone = function () {
     if(pending === 0) {
-      future.return(results);
+      future.returns(results);
     }
   };
 
@@ -139,7 +296,7 @@ ebb.syncAll = function (vals) {
       pending++;
       val.then(resolve(i));
     } else {
-      results[i] = val;
+      results[i] = returnMonad(val);
     }
 
   });
@@ -172,85 +329,5 @@ ebb.pipeline = function (/* steps */) {
 
 };
 
-///
 
-var readFile = ebb.async(function(fileName) {
-  var me = this;
-  me['myFileName.txt'] = function () { return '!terces' };
-
-  var time = Math.round(Math.random() * 1000);
-
-  setTimeout(function () {
-
-  if (fileName.indexOf('.') < 0) {
-    me.throw(new Error('fileName must have a period for some reason' + time));
-  }
-
-  try {
-    fileName = me[fileName]();
-  } catch (o_O) {
-    me.throw(new Error('I doesn\'t afraid of everything' + time));
-  }
-
-
-
-      me.return(Ap.slice.call(fileName).reverse().join('') + time);
-  }, time);
-
-});
-
-var p = readFile('myFileName.txt');
-//console.log(p.state());
-p.then(function (res) {
-  //console.log(res);
-  //console.log(p.state());
-});
-
-var p2 = readFile('passwords.txt');
-//console.log(p2.state());
-p2.then(function (res) {
-  //console.log(res);
-  //console.log(this);
-  if (this.err) {
-    //console.log('ERRORRRRR');
-  }
-});
-
-var p3 = readFile('lulzwut');
-//console.log(p3.state());
-p3.then(function (res) {
-  //console.log(res);
-  //console.log(p3.state());
-});
-
-var regularFunction = function () {
-  return 'hello dogg!';
-}
-
-
-ebb.syncAll([p, p2, p3, regularFunction()]).then(function (results) {
-  //console.log('all finished!');
-});
-
-var toUpper = function (txt) {
-  return txt.toUpperCase();
-}
-var cutoff = function (txt) {
-  return txt.substr(0,5);
-};
-
-var randomDelay = ebb.async(function (res) {
-  var me = this;
-  var time = Math.round(Math.random() * 1000);
-  setTimeout(function () { me.return(res); }, time);
-
-
-})
-
-var pipeline = ebb.pipeline(toUpper, cutoff, randomDelay);
-
-ebb.syncAll(['some text', 'moar text', 'silly dogs', 'ting tings'].map(pipeline)).then(function () {
-  //console.log('now we are ready for some things!');
-});
-
-typeof exports !== 'undefined' && (exports.ebb = ebb);
+typeof exports !== 'undefined' && (exports.ebb = ebb, exports.e = e);
