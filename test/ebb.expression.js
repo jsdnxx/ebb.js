@@ -1,6 +1,6 @@
 describe ('ebb.expression', function () {
   it ('is what monads were meant for - lazy evaluation', function () {
-    // once the parameters go in, no guarantees are made as to the order (or number) 
+    // once the parameters go in, no guarantees are made as to the order (or number)
     // of values at any step in evaluating the expression
   });
 
@@ -33,7 +33,7 @@ describe ('ebb.expression', function () {
     it ('returns true if any of the expression values match the predicate', function (done) {
       var even = function (a) { return a % 2 === 0; };
 
-      ebb(1,2,3).any(even).then(function (r) { 
+      ebb(1,2,3).any(even).then(function (r) {
         r.result.should.equal(true);
       })
       ebb(1,3).any(even).then(function (r) {
@@ -42,9 +42,14 @@ describe ('ebb.expression', function () {
       });
     });
 
-    it ('simply checks if there are any values if no predicate is given', function () {
-      ebb(1).any().should.equal(true);
-      ebb().any().should.equal(false);
+    it ('simply checks if there are any values if no predicate is given', function (done) {
+      ebb(1).any().then(function (r) {
+        r.result.should.equal(true);
+      });
+      ebb().any().then(function (r) {
+        r.result.should.equal(false);
+        done();
+      });
     });
 
     it ('causes the expression to be evaluated', function () {
@@ -53,48 +58,65 @@ describe ('ebb.expression', function () {
   });
 
   describe ('.all', function () {
-    it('returns true if all of the expression values match the predicate', function () {
-      var even = function (a) { 
-        return a % 2 === 0; 
+    it('returns true if all of the expression values match the predicate', function (done) {
+      var even = function (a) {
+        return a % 2 === 0;
       };
       var integers = function (a) {
         return a === parseInt(a);
       };
-  
-      ebb(1,2,3).all(even).should.equal(false);
-      ebb(1,2,3).all(integers).should.equal(true);
+
+      ebb(1,2,3).all(even).then(function (val) {
+        val.result.should.equal(false);
+      });
+      ebb(1,2,3).all(integers).then(function (val) {
+        val.result.should.equal(true);
+        done();
+      });
     });
 
-    it('returns true if there are no values', function () {
-      ebb().all(function () {}).should.equal(true);
+    it('returns true if there are no values', function (done) {
+      ebb().all(function () {}).then(function (val) {
+        val.result.should.equal(true);
+        done();
+      });
     });
 
   });
 
   describe ('.first', function () {
-    it ('returns the first value that matches the predicate', function () {
+    it ('returns the first value that matches the predicate', function (done) {
       var even = function (a) { return a % 2 === 0; };
 
-      ebb(1,2,3).first(even).should.equal(2);
+      ebb(1,2,3).first(even).then(function (val) {
+        val.result.should.equal(2);
+        done();
+      });
     });
 
     it ('returns the first value if there is no predicate', function () {
-      ebb(1,2,3).first().should.equal(1);
+      ebb(1,2,3).first().then(function (val) {
+        val.result.should.equal(1);
+      });
     });
 
-    it ('throws an exception if none of the values match the predicate', function () {
+    it ('throws an exception if none of the values match the predicate', function (done) {
       var even = function (a) { return a % 2 === 0; };
 
-      (function () {
-          ebb(1,3).first(even);
-      }).should.throw(new Error());
+
+          ebb(1,3).first(even).then(function (val) {
+            (val.err !== undefined).should.equal(true);
+            done();
+          });
+
     });
 
     it ('throws an exception if there are no values', function () {
-      (function () {
-        ebb().first();
-      }).should.throw(new Error());
-    })
+      
+      ebb().first().then(function (val) {
+        (val.err !== undefined).should.equal(true);
+      });
+    });
   });
 
 

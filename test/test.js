@@ -37,7 +37,7 @@ describe('ebb.async', function () {
     });
 
 
-    it('can return an async value using this.return', function (done) {
+    it('can return an async value using this.returns', function (done) {
       var fn = ebb.async(function() {
         this.returns(true);
       });
@@ -47,6 +47,23 @@ describe('ebb.async', function () {
         done();
       });
 
+    });
+
+    it('has this.returns that returns its promise', function (done) {
+      var prom;
+      var fn = ebb.async(function() {
+        console.log('sdf')
+        var prom = this.returns('x');
+        e.isPromise(prom).should.equal(true);
+        console.log('whats taters', e.isPromise(prom))
+
+      })
+      fn().then(function (ret) {
+        ret.result.should.equal('x');
+        ret.state.should.equal('successful');
+        console.log('done', done)
+        done();
+      });
     });
 
     it('can wrap a sync function with no knowledge of async', function (done) {

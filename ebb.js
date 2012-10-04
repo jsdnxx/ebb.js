@@ -19,13 +19,15 @@ e.isPromise = function (fn) {
 /*
 
 interface monad {
-  
+  err: any;
+  state: string;
+  result: any;
 }
 
  */
 
 e.isMonad = function (obj) {
-  return e.isObject(obj) && obj.hasOwnProperty('result');
+  return e.isObject(obj) && typeof obj.state === 'string';
 };
 
 e.toResult = function (monad) {
@@ -93,12 +95,12 @@ ebb.expression.prototype.any = function (predicate) {
   //promise.progress(function (latestResult) {
   //  if (fn())
   //});
-  //
+
   var future = new ebb.Future();
   var p = this.evaluate();
 
   if (p.info.paramCount === 0) {
-    future.returns(false);
+    return future.returns(false);
   }
 
   p.then(function (val) {
@@ -125,35 +127,50 @@ ebb.expression.prototype.any = function (predicate) {
 };
 
 ebb.expression.prototype.all = function (predicate) {
-  var params = this.evaluate();
+  var future = new ebb.Future();
+  var p = this.evaluate();
 
-  if (params.length === 0) {
-    return true;
+  if (p.info.paramCount === 0) {
+    return future.returns(true);
   }
+  p.then(function (val) {
+    var params = val.result;
 
-  var i, len;
-  return params.map(predicate).reduce(function (m,v) { return m && v; });
+    future.returns(params.map(predicate).reduce(function (m,v) { return m && v; }));
+  });
+
+  return future.promise();
 };
 
 ebb.expression.prototype.first = function (predicate) {
-  var vals = this.evaluate();
+  var future = new ebb.Future();
+  var p = this.evaluate();
 
-  if (!e.isFunction(predicate)) {
-    if (vals.length === 0) {
-      throw new Error();
+  p.then(function (ret) {
+    var vals = ret.result;
+    console.log(ret);
+    if (!e.isFunction(predicate)) {
+      if (vals.length === 0) {
+        return future.throws(new Error());
+      }
+      return future.returns(vals[0]);
     }
-    return vals[0];
-  }
 
-  var i, len;
-  for (i = 0, len = vals.length; i < len; i++) {
-    var val = vals[i];
-    if (predicate(val)) {
-      return val;
+    var i, len;
+    for (i = 0, len = vals.length; i < len; i++) {
+      var val = vals[i];
+      if (predicate(val)) {
+        return future.returns(val);
+      }
     }
-  }
-  // none matched
-  throw new Error();
+    console.log('errrr')
+    // none matched
+    future.throws(new Error());
+  });
+
+
+
+  return future.promise();
 };
 
 
@@ -189,6 +206,7 @@ ebb.Future.prototype = {
       this.resolved = true;
       ebb.next.call(this);
     }
+    return this.promise();
   },
 
   throws: function (err) {
@@ -198,6 +216,7 @@ ebb.Future.prototype = {
       this.resolved = true;
       ebb.next.call(this);
     }
+    return this.promise();
 
   },
   updateProgress: function (val) {
@@ -313,14 +332,14 @@ ebb.pipeline = function (/* steps */) {
 
   return ebb.async(function (res) {
     var me = this,
-      p = step.call(null, {result: res});
+      p = step.call(null, returnMonad(res));
 
-      p.then(function (res) {
+      p.then(function (err, res) {
         if (steps.length === 0) {
           //console.log('no more steps');
-          me.return(res);
+          me.returns(res);
         } else {
-          ebb.pipeline.apply(null, steps)(res).then(function (res) { me.return(res); });
+          ebb.pipeline.apply(null, steps)(res).then(function (err, res) { me.returns(res); });
         }
 
       });

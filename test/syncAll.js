@@ -30,10 +30,9 @@ describe('ebb.syncAll', function () {
   });
 
   it('returns the results of the promises in the order they were passed in', function (done) {
-    var f1 = new ebb.Future(),
-        p1 = f1.promise();
+    var f1 = new ebb.Future();
 
-    ebb.syncAll([p1, 'world']).then(function (ret) {
+    ebb.syncAll([f1.returns('hello'), 'world']).then(function (ret) {
       Array.isArray(ret.result).should.equal(true);
       ret.result.length.should.equal(2);
       ret.result.map(function(r){return r.result; }).join()
@@ -41,7 +40,6 @@ describe('ebb.syncAll', function () {
       done();
     });
 
-    f1.returns('hello');
   });
 
   
