@@ -148,7 +148,7 @@ ebb.expression.prototype.first = function (predicate) {
 
   p.then(function (ret) {
     var vals = ret.result;
-    console.log(ret);
+
     if (!e.isFunction(predicate)) {
       if (vals.length === 0) {
         return future.throws(new Error());
@@ -163,7 +163,7 @@ ebb.expression.prototype.first = function (predicate) {
         return future.returns(val);
       }
     }
-    console.log('errrr')
+
     // none matched
     future.throws(new Error());
   });

@@ -42,5 +42,4 @@ describe('ebb.syncAll', function () {
 
   });
 
-  
 });

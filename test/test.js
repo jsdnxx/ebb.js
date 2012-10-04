@@ -52,16 +52,13 @@ describe('ebb.async', function () {
     it('has this.returns that returns its promise', function (done) {
       var prom;
       var fn = ebb.async(function() {
-        console.log('sdf')
         var prom = this.returns('x');
         e.isPromise(prom).should.equal(true);
-        console.log('whats taters', e.isPromise(prom))
 
       })
       fn().then(function (ret) {
         ret.result.should.equal('x');
         ret.state.should.equal('successful');
-        console.log('done', done)
         done();
       });
     });
